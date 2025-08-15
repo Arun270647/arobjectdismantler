@@ -104,7 +104,7 @@ def preprocess_image(image: np.ndarray, target_size: tuple = (640, 640)) -> np.n
     return input_data, scale, x_offset, y_offset
 
 def postprocess_detections(outputs: List[np.ndarray], scale: float, x_offset: int, y_offset: int, 
-                         original_width: int, original_height: int, conf_threshold: float = 0.1) -> List[DetectionResult]:
+                         original_width: int, original_height: int, conf_threshold: float = 0.01) -> List[DetectionResult]:
     """Process model outputs to get detection results"""
     try:
         detections = []
