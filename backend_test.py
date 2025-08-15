@@ -141,7 +141,7 @@ class ExtensionBoxAPITester:
             ws_uri = f"{self.ws_url}/api/ws/detect"
             print(f"🔍 Testing WebSocket connection to: {ws_uri}")
             
-            async with websockets.connect(ws_uri, timeout=10) as websocket:
+            async with websockets.connect(ws_uri) as websocket:
                 # Test connection
                 self.log_test("WebSocket Connection", True, "- Connected successfully")
                 
