@@ -104,7 +104,7 @@ def preprocess_image(image: np.ndarray, target_size: tuple = (640, 640)) -> np.n
     return input_data, scale, x_offset, y_offset
 
 def postprocess_detections(outputs: List[np.ndarray], scale: float, x_offset: int, y_offset: int, 
-                         original_width: int, original_height: int, conf_threshold: float = 0.25) -> List[DetectionResult]:
+                         original_width: int, original_height: int, conf_threshold: float = 0.1) -> List[DetectionResult]:
     """Process model outputs to get detection results"""
     try:
         detections = []
@@ -116,6 +116,18 @@ def postprocess_detections(outputs: List[np.ndarray], scale: float, x_offset: in
             boxes = []
             confidences = []
             class_ids = []
+            
+            # Debug: check max values
+            max_objectness = np.max(output[:, 4])
+            max_class_score = np.max(output[:, 5:])
+            print(f"Debug - Max objectness: {max_objectness:.6f}, Max class score: {max_class_score:.6f}")
+            
+            # Count detections above different thresholds
+            count_01 = np.sum(output[:, 4] > 0.01)
+            count_05 = np.sum(output[:, 4] > 0.05) 
+            count_1 = np.sum(output[:, 4] > 0.1)
+            count_3 = np.sum(output[:, 4] > 0.3)
+            print(f"Debug - Detections above thresholds: 0.01:{count_01}, 0.05:{count_05}, 0.1:{count_1}, 0.3:{count_3}")
             
             for i, detection in enumerate(output):
                 # detection[4] is objectness score
@@ -170,6 +182,8 @@ def postprocess_detections(outputs: List[np.ndarray], scale: float, x_offset: in
                             boxes.append([x1_orig, y1_orig, x2_orig, y2_orig])
                             confidences.append(float(confidence))
                             class_ids.append(int(class_id))
+                            
+                            print(f"Debug - Detection {len(boxes)}: obj={objectness:.4f}, cls={class_confidence:.4f}, conf={confidence:.4f}, class_id={class_id}")
             
             print(f"Found {len(boxes)} potential detections before NMS")
             
