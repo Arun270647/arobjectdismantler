@@ -192,11 +192,29 @@ const App = () => {
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
 
+      // Only proceed if video has valid dimensions
+      if (canvas.width === 0 || canvas.height === 0) {
+        console.log('Video not ready, skipping frame');
+        return;
+      }
+
       // Draw current frame
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-      // Convert to base64
-      const imageData = canvas.toDataURL('image/jpeg', 0.8);
+      // Convert to base64 with better error handling
+      let imageData;
+      try {
+        imageData = canvas.toDataURL('image/jpeg', 0.8);
+        
+        // Validate base64 data
+        if (!imageData || imageData.length < 100) {
+          console.log('Invalid image data, skipping frame');
+          return;
+        }
+      } catch (error) {
+        console.error('Error converting canvas to base64:', error);
+        return;
+      }
 
       // Send to WebSocket
       if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -206,7 +224,13 @@ const App = () => {
           width: canvas.width,
           height: canvas.height
         };
-        wsRef.current.send(JSON.stringify(message));
+        
+        try {
+          wsRef.current.send(JSON.stringify(message));
+          console.log(`Sent frame: ${canvas.width}x${canvas.height}, data length: ${imageData.length}`);
+        } catch (error) {
+          console.error('Error sending WebSocket message:', error);
+        }
       }
 
     } catch (err) {
