@@ -94,6 +94,8 @@ def preprocess_image(image: np.ndarray, target_size: tuple = (640, 640)) -> np.n
     x_offset = (target_size[0] - new_w) // 2
     padded[y_offset:y_offset + new_h, x_offset:x_offset + new_w] = resized
     
+    print(f"Debug - Preprocessing: input=({h}, {w}), scale={scale:.3f}, resized=({new_h}, {new_w}), offsets=({x_offset}, {y_offset})")
+    
     # Normalize to [0, 1] if model expects float input
     if input_details[0]['dtype'] == np.float32:
         padded = padded.astype(np.float32) / 255.0
