@@ -8,7 +8,7 @@ import base64
 from datetime import datetime
 from io import BytesIO
 from PIL import Image
-import tflite_runtime.interpreter as tflite
+import tensorflow as tf
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Depends
 from fastapi.responses import JSONResponse
@@ -62,7 +62,7 @@ def load_model():
             raise FileNotFoundError(f"Model file not found: {model_path}")
         
         # Load TFLite model and allocate tensors
-        interpreter = tflite.Interpreter(model_path=model_path)
+        interpreter = tf.lite.Interpreter(model_path=model_path)
         interpreter.allocate_tensors()
         
         # Get input and output tensors
