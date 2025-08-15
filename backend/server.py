@@ -124,10 +124,19 @@ def postprocess_detections(outputs: List[np.ndarray], scale: float, x_offset: in
             
             # Count detections above different thresholds
             count_01 = np.sum(output[:, 4] > 0.01)
-            count_05 = np.sum(output[:, 4] > 0.05) 
-            count_1 = np.sum(output[:, 4] > 0.1)
-            count_3 = np.sum(output[:, 4] > 0.3)
-            print(f"Debug - Detections above thresholds: 0.01:{count_01}, 0.05:{count_05}, 0.1:{count_1}, 0.3:{count_3}")
+            count_005 = np.sum(output[:, 4] > 0.005)
+            print(f"Debug - Detections above thresholds: 0.005:{count_005}, 0.01:{count_01}")
+            
+            # Find the top 5 objectness scores
+            top_indices = np.argsort(output[:, 4])[-5:]
+            print("Debug - Top 5 objectness scores:")
+            for idx in reversed(top_indices):
+                obj = output[idx, 4]
+                class_scores = output[idx, 5:]
+                max_class = np.max(class_scores)
+                print(f"  Idx {idx}: obj={obj:.6f}, max_class={max_class:.6f}, combined={obj*max_class:.6f}")
+            
+            processed_count = 0
             
             for i, detection in enumerate(output):
                 # detection[4] is objectness score
