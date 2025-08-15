@@ -150,18 +150,24 @@ def postprocess_detections(outputs: List[np.ndarray], scale: float, x_offset: in
                     class_confidence = class_scores[class_id]
                     
                     # For extension box detection, use objectness as main confidence
-                    # since class confidence might be less reliable for specific object types
                     confidence = objectness
                     
-                    # Skip the second confidence check since we already passed the first one
-                    # Extract box coordinates (normalized to 0-640)
+                    # Extract raw box coordinates
                     center_x, center_y, width, height = detection[:4]
+                    
+                    # Debug: Print raw coordinates for first few detections
+                    if len(boxes) < 5:
+                        print(f"Debug - Raw coords: cx={center_x:.3f}, cy={center_y:.3f}, w={width:.3f}, h={height:.3f}")
                     
                     # Convert to corner coordinates (still in model coordinate system)
                     x1 = center_x - width / 2
                     y1 = center_y - height / 2
                     x2 = center_x + width / 2
                     y2 = center_y + height / 2
+                    
+                    # Debug: Print corner coordinates
+                    if len(boxes) < 5:
+                        print(f"Debug - Corner coords: x1={x1:.3f}, y1={y1:.3f}, x2={x2:.3f}, y2={y2:.3f}")
                     
                     # Transform back to original image coordinates
                     # First, convert from model coords (0-640) to padded image coords
@@ -182,6 +188,11 @@ def postprocess_detections(outputs: List[np.ndarray], scale: float, x_offset: in
                     x2_orig = x2_resized / scale
                     y2_orig = y2_resized / scale
                     
+                    # Debug: Print transformation details for first few
+                    if len(boxes) < 5:
+                        print(f"Debug - Scale: {scale:.3f}, offsets: x={x_offset}, y={y_offset}")
+                        print(f"Debug - Final coords: x1={x1_orig:.3f}, y1={y1_orig:.3f}, x2={x2_orig:.3f}, y2={y2_orig:.3f}")
+                    
                     # Clamp to image boundaries
                     x1_orig = max(0, min(x1_orig, original_width))
                     y1_orig = max(0, min(y1_orig, original_height))
@@ -194,9 +205,10 @@ def postprocess_detections(outputs: List[np.ndarray], scale: float, x_offset: in
                         confidences.append(float(confidence))
                         class_ids.append(int(class_id))
                         
-                        print(f"Debug - Detection {len(boxes)}: obj={objectness:.4f}, cls={class_confidence:.4f}, conf={confidence:.4f}, class_id={class_id}, bbox=[{x1_orig:.1f}, {y1_orig:.1f}, {x2_orig:.1f}, {y2_orig:.1f}]")
+                        print(f"Debug - Valid detection {len(boxes)}: obj={objectness:.4f}, bbox=[{x1_orig:.1f}, {y1_orig:.1f}, {x2_orig:.1f}, {y2_orig:.1f}]")
                     else:
-                        print(f"Debug - Invalid box: obj={objectness:.4f}, bbox=[{x1_orig:.1f}, {y1_orig:.1f}, {x2_orig:.1f}, {y2_orig:.1f}]")
+                        if len(boxes) < 5:  # Only log first few invalid boxes to avoid spam
+                            print(f"Debug - Invalid box: obj={objectness:.4f}, bbox=[{x1_orig:.1f}, {y1_orig:.1f}, {x2_orig:.1f}, {y2_orig:.1f}] (reason: w={x2_orig-x1_orig:.1f}, h={y2_orig-y1_orig:.1f})")
             
             print(f"Debug - Processed {processed_count} detections")
             
