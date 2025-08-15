@@ -104,77 +104,118 @@ def preprocess_image(image: np.ndarray, target_size: tuple = (640, 640)) -> np.n
     return input_data, scale, x_offset, y_offset
 
 def postprocess_detections(outputs: List[np.ndarray], scale: float, x_offset: int, y_offset: int, 
-                         original_width: int, original_height: int, conf_threshold: float = 0.5) -> List[DetectionResult]:
+                         original_width: int, original_height: int, conf_threshold: float = 0.25) -> List[DetectionResult]:
     """Process model outputs to get detection results"""
     try:
         detections = []
         
-        # Handle different output formats (YOLO-style)
         if len(outputs) >= 1:
-            # Assuming YOLO format: [batch, num_detections, 85] where 85 = 4 (box) + 1 (conf) + 80 (classes)
-            output = outputs[0][0]  # Remove batch dimension
+            # YOLO format: [batch, num_detections, 85] where 85 = 4 (box) + 1 (objectness) + 80 (classes)
+            output = outputs[0][0]  # Remove batch dimension, shape: (25200, 85)
             
             boxes = []
             confidences = []
+            class_ids = []
             
-            for detection in output:
-                if len(detection) >= 5:  # At least x, y, w, h, confidence
-                    confidence = detection[4]
+            for i, detection in enumerate(output):
+                # detection[4] is objectness score
+                objectness = detection[4]
+                
+                if objectness > conf_threshold:
+                    # Get class probabilities (indices 5-84)
+                    class_scores = detection[5:]
+                    class_id = np.argmax(class_scores)
+                    class_confidence = class_scores[class_id]
+                    
+                    # Combined confidence (objectness * class_confidence)
+                    confidence = objectness * class_confidence
                     
                     if confidence > conf_threshold:
-                        # Extract box coordinates (center_x, center_y, width, height)
+                        # Extract box coordinates (normalized to 0-640)
                         center_x, center_y, width, height = detection[:4]
                         
-                        # Convert to corner coordinates
+                        # Convert to corner coordinates (still in model coordinate system)
                         x1 = center_x - width / 2
                         y1 = center_y - height / 2
                         x2 = center_x + width / 2
                         y2 = center_y + height / 2
                         
-                        # Adjust for preprocessing transformations
-                        x1 = (x1 - x_offset) / scale
-                        y1 = (y1 - y_offset) / scale
-                        x2 = (x2 - x_offset) / scale
-                        y2 = (y2 - y_offset) / scale
+                        # Transform back to original image coordinates
+                        # First, convert from model coords (0-640) to padded image coords
+                        x1_padded = x1
+                        y1_padded = y1
+                        x2_padded = x2
+                        y2_padded = y2
+                        
+                        # Then remove padding offset
+                        x1_resized = x1_padded - x_offset
+                        y1_resized = y1_padded - y_offset
+                        x2_resized = x2_padded - x_offset
+                        y2_resized = y2_padded - y_offset
+                        
+                        # Finally scale back to original image size
+                        x1_orig = x1_resized / scale
+                        y1_orig = y1_resized / scale
+                        x2_orig = x2_resized / scale
+                        y2_orig = y2_resized / scale
                         
                         # Clamp to image boundaries
-                        x1 = max(0, min(x1, original_width))
-                        y1 = max(0, min(y1, original_height))
-                        x2 = max(0, min(x2, original_width))
-                        y2 = max(0, min(y2, original_height))
+                        x1_orig = max(0, min(x1_orig, original_width))
+                        y1_orig = max(0, min(y1_orig, original_height))
+                        x2_orig = max(0, min(x2_orig, original_width))
+                        y2_orig = max(0, min(y2_orig, original_height))
                         
                         # Only add if box is valid
-                        if x2 > x1 and y2 > y1:
-                            boxes.append([x1, y1, x2, y2])
+                        if x2_orig > x1_orig and y2_orig > y1_orig:
+                            boxes.append([x1_orig, y1_orig, x2_orig, y2_orig])
                             confidences.append(float(confidence))
+                            class_ids.append(int(class_id))
+            
+            print(f"Found {len(boxes)} potential detections before NMS")
             
             # Apply NMS to remove overlapping boxes
-            if boxes:
+            if boxes and len(boxes) > 0:
+                # Convert to format expected by cv2.dnn.NMSBoxes
+                nms_boxes = [(x1, y1, x2-x1, y2-y1) for x1, y1, x2, y2 in boxes]
+                
                 indices = cv2.dnn.NMSBoxes(
-                    [(x1, y1, x2-x1, y2-y1) for x1, y1, x2, y2 in boxes],
+                    nms_boxes,
                     confidences,
                     conf_threshold,
                     0.4  # NMS threshold
                 )
                 
+                print(f"After NMS: {len(indices) if len(indices) > 0 else 0} detections")
+                
                 if len(indices) > 0:
-                    # Get most confident detection
-                    best_idx = np.argmax([confidences[i] for i in indices.flatten()])
-                    idx = indices.flatten()[best_idx]
+                    # Get most confident detection (as requested)
+                    if isinstance(indices, np.ndarray):
+                        indices = indices.flatten()
                     
-                    x1, y1, x2, y2 = boxes[idx]
-                    confidence = confidences[idx]
+                    best_idx = 0
+                    best_conf = 0
+                    for idx in indices:
+                        if confidences[idx] > best_conf:
+                            best_conf = confidences[idx]
+                            best_idx = idx
+                    
+                    x1, y1, x2, y2 = boxes[best_idx]
+                    confidence = confidences[best_idx]
                     
                     detections.append(DetectionResult(
                         bbox=[float(x1), float(y1), float(x2), float(y2)],
                         confidence=float(confidence),
                         class_name="extension_box"
                     ))
+                    
+                    print(f"Best detection: conf={confidence:.3f}, bbox=[{x1:.1f}, {y1:.1f}, {x2:.1f}, {y2:.1f}]")
         
         return detections
     
     except Exception as e:
         print(f"Error in postprocessing: {e}")
+        import traceback
+        traceback.print_exc()
         return []
 
 async def run_inference(image: np.ndarray, original_width: int, original_height: int) -> List[DetectionResult]:
