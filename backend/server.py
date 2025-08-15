@@ -154,63 +154,57 @@ def postprocess_detections(outputs: List[np.ndarray], scale: float, x_offset: in
                     # For extension box detection, use objectness as main confidence
                     confidence = objectness
                     
-                    # Extract raw box coordinates
+                    # Extract raw box coordinates (these are normalized 0-1)
                     center_x, center_y, width, height = detection[:4]
                     
                     # Debug: Print raw coordinates for first few detections
                     if len(boxes) < 5:
-                        print(f"Debug - Raw coords: cx={center_x:.3f}, cy={center_y:.3f}, w={width:.3f}, h={height:.3f}")
+                        print(f"Debug - Raw coords (normalized): cx={center_x:.3f}, cy={center_y:.3f}, w={width:.3f}, h={height:.3f}")
                     
-                    # Convert to corner coordinates (still in model coordinate system)
-                    x1 = center_x - width / 2
-                    y1 = center_y - height / 2
-                    x2 = center_x + width / 2
-                    y2 = center_y + height / 2
+                    # Convert normalized coordinates to pixel coordinates in the 640x640 model space
+                    model_cx = center_x * 640
+                    model_cy = center_y * 640
+                    model_w = width * 640
+                    model_h = height * 640
                     
-                    # Debug: Print corner coordinates
+                    # Convert to corner coordinates in model space
+                    model_x1 = model_cx - model_w / 2
+                    model_y1 = model_cy - model_h / 2
+                    model_x2 = model_cx + model_w / 2
+                    model_y2 = model_cy + model_h / 2
+                    
+                    # Debug: Print model coordinates
                     if len(boxes) < 5:
-                        print(f"Debug - Corner coords: x1={x1:.3f}, y1={y1:.3f}, x2={x2:.3f}, y2={y2:.3f}")
+                        print(f"Debug - Model coords: x1={model_x1:.1f}, y1={model_y1:.1f}, x2={model_x2:.1f}, y2={model_y2:.1f}")
                     
-                    # Transform back to original image coordinates
-                    # First, convert from model coords (0-640) to padded image coords
-                    x1_padded = x1
-                    y1_padded = y1
-                    x2_padded = x2
-                    y2_padded = y2
-                    
-                    # Then remove padding offset
-                    x1_resized = x1_padded - x_offset
-                    y1_resized = y1_padded - y_offset
-                    x2_resized = x2_padded - x_offset
-                    y2_resized = y2_padded - y_offset
-                    
-                    # Finally scale back to original image size
-                    x1_orig = x1_resized / scale
-                    y1_orig = y1_resized / scale
-                    x2_orig = x2_resized / scale
-                    y2_orig = y2_resized / scale
+                    # Transform from model space (640x640) to original image space
+                    # Remove padding offset first
+                    orig_x1 = (model_x1 - x_offset) / scale
+                    orig_y1 = (model_y1 - y_offset) / scale
+                    orig_x2 = (model_x2 - x_offset) / scale
+                    orig_y2 = (model_y2 - y_offset) / scale
                     
                     # Debug: Print transformation details for first few
                     if len(boxes) < 5:
                         print(f"Debug - Scale: {scale:.3f}, offsets: x={x_offset}, y={y_offset}")
-                        print(f"Debug - Final coords: x1={x1_orig:.3f}, y1={y1_orig:.3f}, x2={x2_orig:.3f}, y2={y2_orig:.3f}")
+                        print(f"Debug - Final coords: x1={orig_x1:.1f}, y1={orig_y1:.1f}, x2={orig_x2:.1f}, y2={orig_y2:.1f}")
                     
                     # Clamp to image boundaries
-                    x1_orig = max(0, min(x1_orig, original_width))
-                    y1_orig = max(0, min(y1_orig, original_height))
-                    x2_orig = max(0, min(x2_orig, original_width))
-                    y2_orig = max(0, min(y2_orig, original_height))
+                    orig_x1 = max(0, min(orig_x1, original_width))
+                    orig_y1 = max(0, min(orig_y1, original_height))
+                    orig_x2 = max(0, min(orig_x2, original_width))
+                    orig_y2 = max(0, min(orig_y2, original_height))
                     
                     # Only add if box is valid
-                    if x2_orig > x1_orig and y2_orig > y1_orig:
-                        boxes.append([x1_orig, y1_orig, x2_orig, y2_orig])
+                    if orig_x2 > orig_x1 and orig_y2 > orig_y1:
+                        boxes.append([orig_x1, orig_y1, orig_x2, orig_y2])
                         confidences.append(float(confidence))
                         class_ids.append(int(class_id))
                         
-                        print(f"Debug - Valid detection {len(boxes)}: obj={objectness:.4f}, bbox=[{x1_orig:.1f}, {y1_orig:.1f}, {x2_orig:.1f}, {y2_orig:.1f}]")
+                        print(f"Debug - Valid detection {len(boxes)}: obj={objectness:.4f}, bbox=[{orig_x1:.1f}, {orig_y1:.1f}, {orig_x2:.1f}, {orig_y2:.1f}]")
                     else:
                         if len(boxes) < 5:  # Only log first few invalid boxes to avoid spam
-                            print(f"Debug - Invalid box: obj={objectness:.4f}, bbox=[{x1_orig:.1f}, {y1_orig:.1f}, {x2_orig:.1f}, {y2_orig:.1f}] (reason: w={x2_orig-x1_orig:.1f}, h={y2_orig-y1_orig:.1f})")
+                            print(f"Debug - Invalid box: obj={objectness:.4f}, bbox=[{orig_x1:.1f}, {orig_y1:.1f}, {orig_x2:.1f}, {orig_y2:.1f}] (reason: w={orig_x2-orig_x1:.1f}, h={orig_y2-orig_y1:.1f})")
             
             print(f"Debug - Processed {processed_count} detections")
             
