@@ -139,8 +139,9 @@ def postprocess_detections(outputs: List[np.ndarray], scale: float, x_offset: in
                     class_id = np.argmax(class_scores)
                     class_confidence = class_scores[class_id]
                     
-                    # Combined confidence (objectness * class_confidence)
-                    confidence = objectness * class_confidence
+                    # For extension box detection, use objectness as main confidence
+                    # since class confidence might be less reliable for specific object types
+                    confidence = objectness
                     
                     if confidence > conf_threshold:
                         # Extract box coordinates (normalized to 0-640)
