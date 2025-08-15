@@ -54,10 +54,15 @@ const App = () => {
       wsRef.current.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
+          console.log('Received WebSocket message:', data.type, data);
           
           if (data.type === 'detection_result') {
             setDetections(data.detections);
             setDetectionStatus(data.detections.length > 0 ? 'found' : 'detecting');
+            
+            if (data.detections.length > 0) {
+              console.log(`Detection found! Confidence: ${data.detections[0].confidence.toFixed(3)}`);
+            }
             
             // Update stats
             setStreamStats(prev => ({
@@ -67,6 +72,7 @@ const App = () => {
           } else if (data.type === 'error') {
             console.error('Detection error:', data.message);
             setDetectionStatus('idle');
+            setError(`Detection error: ${data.message}`);
           }
         } catch (err) {
           console.error('Error parsing WebSocket message:', err);
